@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jobflow-worker
+  namespace: jobflow
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jobflow-worker
+  template:
+    metadata:
+      labels:
+        app: jobflow-worker
+    spec:
+      containers:
+        - name: jobflow-worker
+          image: jobflow-worker:multi
+          env:
+            - name: REDIS_ADDR
+              value: "redis:6379"

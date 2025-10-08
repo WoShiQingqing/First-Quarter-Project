@@ -1,0 +1,14 @@
+FROM golang:1.25 AS builder
+WORKDIR /src
+COPY worker/go.mod worker/go.sum ./
+RUN go mod download
+COPY worker/ .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o worker .
+
+FROM debian:bookworm-slim
+WORKDIR /app
+COPY --from=builder /src/worker /app/worker
+RUN useradd -u 10002 -m workeruser
+USER 10002
+ENV REDIS_ADDR=host.docker.internal:6379
+CMD ["./worker"]

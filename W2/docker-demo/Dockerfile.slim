@@ -1,0 +1,17 @@
+# 构建静态二进制（无 libc 依赖）
+FROM golang:1.22 AS builder
+WORKDIR /app
+COPY . .
+RUN go mod init docker-demo || true
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -trimpath -ldflags="-s -w" -o app main.go
+
+# 运行镜像：空镜像 + 非 root
+FROM scratch
+WORKDIR /app
+# 非 root 用户（任意非 0 UID/GID）
+USER 1000:1000
+# 只拷贝执行文件
+COPY --from=builder /app/app .
+EXPOSE 8080
+ENTRYPOINT ["./app"]

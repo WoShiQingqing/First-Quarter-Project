@@ -1,0 +1,10 @@
+# 基础版（体积大，启动正常）
+FROM golang:1.22
+
+WORKDIR /app
+COPY . .
+
+RUN go mod init docker-demo && go build -o app main.go
+
+EXPOSE 8080
+CMD ["./app"]

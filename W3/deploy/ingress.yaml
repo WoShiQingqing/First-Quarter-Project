@@ -1,0 +1,18 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: jobflow-api
+  namespace: jobflow
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: jobflow.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: jobflow-api
+                port:
+                  number: 8080      
