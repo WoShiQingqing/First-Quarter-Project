@@ -12,7 +12,6 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ toLower(github.repository) }}   # e.g. woshiqingqing/first-quarter-project
   SHA_SHORT: ${{ github.sha }}
 
 jobs:
@@ -48,6 +47,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Lowercase repo for image prefix
+        run: |
+          repo_lower=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
+          echo "IMAGE_PREFIX=$repo_lower" >> "$GITHUB_ENV"       
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
