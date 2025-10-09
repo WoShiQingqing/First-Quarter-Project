@@ -12,7 +12,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_PREFIX: ${{ github.repository }}   # WoShiQingqing/First-Quarter-Project
+  IMAGE_PREFIX: ${{ toLower(github.repository) }}   # e.g. woshiqingqing/first-quarter-project
   SHA_SHORT: ${{ github.sha }}
 
 jobs:
@@ -75,7 +75,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # Worker（如果暂时没有对应 Dockerfile，可以先注释本段）
       - name: Build & Push Worker image
         uses: docker/build-push-action@v6
         with:
@@ -87,4 +86,4 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ env.SHA_SHORT }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=max    
