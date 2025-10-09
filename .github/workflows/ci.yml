@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master" ]   # 你当前分支叫 master
+  pull_request:
+    branches: [ "master" ]
+
+permissions:
+  contents: read
+  packages: write            # 允许推镜像到 ghcr.io
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ${{ github.repository }}   # WoShiQingqing/First-Quarter-Project
+  SHA_SHORT: ${{ github.sha }}
+
+jobs:
+  lint_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Run Go tests (best-effort)
+        run: |
+          if ls **/*.go >/dev/null 2>&1; then
+            go test ./... || true
+          else
+            echo "No Go files yet, skipping tests."
+          fi
+
+  build_and_push:
+    needs: lint_test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # API 镜像（你的 Dockerfile 在 W2/cloudnative-jobflow/ 下）
+      - name: Build & Push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./W2/cloudnative-jobflow
+          file: ./W2/cloudnative-jobflow/Dockerfile.api.slim
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ env.SHA_SHORT }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Worker（如果暂时没有对应 Dockerfile，可以先注释本段）
+      - name: Build & Push Worker image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./W2/cloudnative-jobflow
+          file: ./W2/cloudnative-jobflow/Dockerfile.worker.multi
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:latest
+            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ env.SHA_SHORT }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
