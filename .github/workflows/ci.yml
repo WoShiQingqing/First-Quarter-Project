@@ -1,14 +1,14 @@
-name: CI
+name: CI (cached)
 
 on:
   push:
-    branches: [ "master" ]   # 你当前分支叫 master
+    branches: [ "master" ]
   pull_request:
     branches: [ "master" ]
 
 permissions:
   contents: read
-  packages: write            # 允许推镜像到 ghcr.io
+  packages: write
 
 env:
   REGISTRY: ghcr.io
@@ -24,12 +24,13 @@ jobs:
         with:
           go-version: '1.22'
 
-      - name: Cache Go build
+      # ---------- L1 缓存：Go 模块 ----------
+      - name: Cache Go modules
         uses: actions/cache@v4
         with:
           path: |
-            ~/.cache/go-build
             ~/go/pkg/mod
+            ~/.cache/go-build
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-
@@ -51,7 +52,7 @@ jobs:
       - name: Lowercase repo for image prefix
         run: |
           repo_lower=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
-          echo "IMAGE_PREFIX=$repo_lower" >> "$GITHUB_ENV"       
+          echo "IMAGE_PREFIX=$repo_lower" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -65,7 +66,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # API 镜像（你的 Dockerfile 在 W2/cloudnative-jobflow/ 下）
+      # ---------- L2 缓存：Docker buildx ----------
       - name: Build & Push API image
         uses: docker/build-push-action@v6
         with:
@@ -90,4 +91,4 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ env.SHA_SHORT }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max    
+          cache-to: type=gha,mode=max
