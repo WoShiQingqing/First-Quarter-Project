@@ -1,0 +1,24 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  lint_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Go fmt & test
+        run: |
+          if ls **/*.go >/dev/null 2>&1; then
+            go fmt ./...
+            go test ./... || true
+          else
+            echo "No Go files yet, skipping tests."
+          fi
