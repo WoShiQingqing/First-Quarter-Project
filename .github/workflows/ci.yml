@@ -1,4 +1,4 @@
-name: CI (cached)
+name: CI (cached)     # Fuck
 
 on:
   push:
@@ -18,13 +18,14 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   SHA_SHORT: ${{ github.sha }}
-  # 仓库名强制小写
-  IMAGE_PREFIX: ${{ toLower(github.repository) }}
 
 jobs:
   lint_test:
     runs-on: ubuntu-latest
     steps:
+      - name: Set image prefix (lowercase)
+        run: echo "IMAGE_PREFIX=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with: { go-version: '1.22' }
@@ -50,13 +51,10 @@ jobs:
     needs: lint_test
     runs-on: ubuntu-latest
 
-    # ③ 多架构矩阵（一次产出 amd64+arm64）
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [ linux/amd64, linux/arm64 ]
-
     steps:
+      - name: Set image prefix (lowercase)
+        run: echo "IMAGE_PREFIX=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
+
       - uses: actions/checkout@v4
 
       - name: Set up QEMU
@@ -78,7 +76,7 @@ jobs:
           file: ./W2/cloudnative-jobflow/Dockerfile.api.slim
           push: true
           # 关键：使用矩阵平台
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64,linux/arm64
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ env.SHA_SHORT }}
@@ -92,7 +90,7 @@ jobs:
           context: ./W2/cloudnative-jobflow
           file: ./W2/cloudnative-jobflow/Dockerfile.worker.multi
           push: true
-          platforms: ${{ matrix.platform }}
+          platforms: linux/amd64,linux/arm64
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ env.SHA_SHORT }}
