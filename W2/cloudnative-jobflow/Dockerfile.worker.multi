@@ -1,27 +1,20 @@
-# ---------- builder ----------
-# 用 BUILDPLATFORM 拉取 builder 基础镜像（不跟目标架构耦合）
-FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS builder
+# syntax=docker/dockerfile:1
 
-# 这两个 build-arg 会由 buildx 自动注入（对应 --platform 的目标）
-ARG TARGETOS
-ARG TARGETARCH
-
+# 构建层
+FROM golang:1.22 AS build
 WORKDIR /src
 COPY . .
+# 交叉编译（若走 buildx，通常会注入 TARGETOS/TARGETARCH）
+ARG TARGETOS TARGETARCH
+RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} CGO_ENABLED=0 \
+    go build -o /out/worker ./W2/cloudnative-jobflow/worker
 
-# 保守起见拉依赖
-RUN go mod download
-
-# 用 TARGETOS/TARGETARCH 交叉编译目标二进制
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags="-s -w" -o /out/worker ./worker
-
-# ---------- runtime ----------
-# 用 TARGETPLATFORM 拉取运行时基础镜像，确保最终镜像的架构与目标一致
-FROM --platform=$TARGETPLATFORM gcr.io/distroless/static:nonroot
-
-# 复制编译产物
-COPY --from=builder /out/worker /worker
-
-USER 65532:65532
-ENTRYPOINT ["/worker"]
+# 运行层（distroless 或 scratch 都可；下面用 distroless 作为例）
+FROM gcr.io/distroless/static:nonroot
+WORKDIR /app
+COPY --from=build /out/worker /app/worker
+USER nonroot:nonroot
+# 👇 一定要有
+ENTRYPOINT ["/app/worker"]
+# 可选：若你希望默认打印帮助
+# CMD ["--help"]
