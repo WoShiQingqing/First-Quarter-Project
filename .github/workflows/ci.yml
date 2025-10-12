@@ -2,57 +2,62 @@ name: CI (cached)
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "master" ]   # 只有 master 推镜像
   pull_request:
-    branches: [ "master" ]
+    branches: [ "master" ]   # PR 只跑 lint/test
 
 permissions:
   contents: read
   packages: write
 
+# ① 并发去重：同一分支只保留最新一次
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   SHA_SHORT: ${{ github.sha }}
+  # 仓库名强制小写
+  IMAGE_PREFIX: ${{ toLower(github.repository) }}
 
 jobs:
   lint_test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-
-      # ---------- L1 缓存：Go 模块 ----------
-      - name: Cache Go modules
-        uses: actions/cache@v4
+        with: { go-version: '1.22' }
+      - uses: actions/cache@v4
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
-
-      - name: Run Go tests (best-effort)
+          restore-keys: ${{ runner.os }}-go-
+      - name: Go fmt & test
         run: |
           if ls **/*.go >/dev/null 2>&1; then
-            go test ./... || true
+            go fmt ./...
+            go test ./...    # 现在让失败真实失败
           else
             echo "No Go files yet, skipping tests."
           fi
 
+  # ② 只有 push 事件才发布镜像
   build_and_push:
+    if: github.event_name == 'push'
     needs: lint_test
     runs-on: ubuntu-latest
+
+    # ③ 多架构矩阵（一次产出 amd64+arm64）
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [ linux/amd64, linux/arm64 ]
+
     steps:
       - uses: actions/checkout@v4
-
-      - name: Lowercase repo for image prefix
-        run: |
-          repo_lower=$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')
-          echo "IMAGE_PREFIX=$repo_lower" >> "$GITHUB_ENV"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -66,29 +71,31 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # ---------- L2 缓存：Docker buildx ----------
-      - name: Build & Push API image
+      - name: Build & Push API (multi-arch)
         uses: docker/build-push-action@v6
         with:
           context: ./W2/cloudnative-jobflow
           file: ./W2/cloudnative-jobflow/Dockerfile.api.slim
           push: true
-          platforms: linux/amd64
+          # 关键：使用矩阵平台
+          platforms: ${{ matrix.platform }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ env.SHA_SHORT }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false   # 先关掉溯源，减少体积；需要再开
 
-      - name: Build & Push Worker image
+      - name: Build & Push Worker (multi-arch)
         uses: docker/build-push-action@v6
         with:
           context: ./W2/cloudnative-jobflow
           file: ./W2/cloudnative-jobflow/Dockerfile.worker.multi
           push: true
-          platforms: linux/amd64
+          platforms: ${{ matrix.platform }}
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ env.SHA_SHORT }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: false
