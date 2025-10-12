@@ -1,14 +1,27 @@
-FROM golang:1.25 AS builder
-WORKDIR /src
-COPY worker/go.mod worker/go.sum ./
-RUN go mod download
-COPY worker/ .
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o worker .
+# ---------- builder ----------
+# 用 BUILDPLATFORM 拉取 builder 基础镜像（不跟目标架构耦合）
+FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS builder
 
-FROM debian:bookworm-slim
-WORKDIR /app
-COPY --from=builder /src/worker /app/worker
-RUN useradd -u 10002 -m workeruser
-USER 10002
-ENV REDIS_ADDR=host.docker.internal:6379
-CMD ["./worker"]
+# 这两个 build-arg 会由 buildx 自动注入（对应 --platform 的目标）
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /src
+COPY . .
+
+# 保守起见拉依赖
+RUN go mod download
+
+# 用 TARGETOS/TARGETARCH 交叉编译目标二进制
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
+    go build -trimpath -ldflags="-s -w" -o /out/worker ./worker
+
+# ---------- runtime ----------
+# 用 TARGETPLATFORM 拉取运行时基础镜像，确保最终镜像的架构与目标一致
+FROM --platform=$TARGETPLATFORM gcr.io/distroless/static:nonroot
+
+# 复制编译产物
+COPY --from=builder /out/worker /worker
+
+USER 65532:65532
+ENTRYPOINT ["/worker"]
