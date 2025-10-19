@@ -76,7 +76,7 @@ jobs:
       - name: Build & Push API (multi-arch)
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./W2/cloudnative-jobflow
           file: ./W2/cloudnative-jobflow/Dockerfile.api.slim
           push: true
           platforms: linux/amd64,linux/arm64
@@ -92,7 +92,7 @@ jobs:
       - name: Build & Push Worker (multi-arch)
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ./W2/cloudnative-jobflow
           file: ./W2/cloudnative-jobflow/Dockerfile.worker.multi
           push: true
           platforms: linux/amd64,linux/arm64

@@ -1,20 +1,16 @@
 # syntax=docker/dockerfile:1
 
-# 构建层
 FROM golang:1.22 AS build
 WORKDIR /src
 COPY . .
-# 交叉编译（若走 buildx，通常会注入 TARGETOS/TARGETARCH）
+ENV GOPROXY=https://proxy.golang.org,direct
+RUN go mod download
 ARG TARGETOS TARGETARCH
 RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} CGO_ENABLED=0 \
-    go build -o /out/worker ./W2/cloudnative-jobflow/worker
+    go build -o /out/worker ./worker
 
-# 运行层（distroless 或 scratch 都可；下面用 distroless 作为例）
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
 COPY --from=build /out/worker /app/worker
 USER nonroot:nonroot
-# 👇 一定要有
 ENTRYPOINT ["/app/worker"]
-# 可选：若你希望默认打印帮助
-# CMD ["--help"]
