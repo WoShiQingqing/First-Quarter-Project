@@ -1,26 +1,32 @@
-# syntax=docker/dockerfile:1
+# syntax=docker/dockerfile:1.7
 
-# ========== 构建阶段 ==========
+# 构建层
 FROM golang:1.22 AS build
-WORKDIR /src
 
-# 可选：QEMU/多架构编译三件套
-ARG TARGETOS
-ARG TARGETARCH
-ENV GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} CGO_ENABLED=0
+# 先切到 API 模块目录
+WORKDIR /src/W2/cloudnative-jobflow/api
 
-# 只拷贝 api 模块的 go.mod / go.sum，先拉依赖
+# 先只拷贝模块依赖文件，利用缓存
 COPY W2/cloudnative-jobflow/api/go.mod .
 COPY W2/cloudnative-jobflow/api/go.sum .
+
+# 可选：设置 Go 代理，提升稳定性
+ENV GOPROXY=https://proxy.golang.org,direct
+
+# 缓存依赖目录，加速拉依赖
 RUN --mount=type=cache,target=/go/pkg/mod \
     go mod download
 
-# 再拷贝 api 源码并编译
-COPY W2/cloudnative-jobflow/api/ ./
-RUN --mount=type=cache,target=/go/pkg/mod \
-    go build -o /out/api .
+# 再拷贝源码
+COPY W2/cloudnative-jobflow/api/ .
 
-# ========== 运行阶段 ==========
+# 编译
+ARG TARGETOS TARGETARCH
+RUN CGO_ENABLED=0 \
+    GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} \
+    go build -o /out/api
+
+# 运行层
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
 COPY --from=build /out/api /app/api
