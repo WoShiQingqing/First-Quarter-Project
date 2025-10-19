@@ -1,21 +1,26 @@
 # syntax=docker/dockerfile:1
 
+# ========== 构建阶段 ==========
 FROM golang:1.22 AS build
 WORKDIR /src
 
-# 只拷贝 go.mod；没有 go.sum 也没关系
-COPY go.mod ./
-# 可选：指定 GOPROXY，提升稳定性
-ENV GOPROXY=https://proxy.golang.org,direct
-RUN go mod download
+# 可选：QEMU/多架构编译三件套
+ARG TARGETOS
+ARG TARGETARCH
+ENV GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} CGO_ENABLED=0
 
-# 再拷贝全部源码
-COPY . .
+# 只拷贝 api 模块的 go.mod / go.sum，先拉依赖
+COPY W2/cloudnative-jobflow/api/go.mod .
+COPY W2/cloudnative-jobflow/api/go.sum .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-ARG TARGETOS TARGETARCH
-RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} CGO_ENABLED=0 \
-    go build -o /out/api ./W2/cloudnative-jobflow/api
+# 再拷贝 api 源码并编译
+COPY W2/cloudnative-jobflow/api/ ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go build -o /out/api .
 
+# ========== 运行阶段 ==========
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
 COPY --from=build /out/api /app/api

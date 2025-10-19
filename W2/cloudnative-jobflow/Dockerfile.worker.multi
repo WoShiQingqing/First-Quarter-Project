@@ -1,18 +1,25 @@
 # syntax=docker/dockerfile:1
 
+# ========== 构建阶段 ==========
 FROM golang:1.22 AS build
 WORKDIR /src
 
-COPY go.mod ./
-ENV GOPROXY=https://proxy.golang.org,direct
-RUN go mod download
+ARG TARGETOS
+ARG TARGETARCH
+ENV GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} CGO_ENABLED=0
 
-COPY . .
+# 只拷贝 worker 模块依赖文件
+COPY W2/cloudnative-jobflow/worker/go.mod .
+COPY W2/cloudnative-jobflow/worker/go.sum .
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-ARG TARGETOS TARGETARCH
-RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} CGO_ENABLED=0 \
-    go build -o /out/worker ./W2/cloudnative-jobflow/worker
+# 拷贝 worker 源码并编译
+COPY W2/cloudnative-jobflow/worker/ ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go build -o /out/worker .
 
+# ========== 运行阶段 ==========
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
 COPY --from=build /out/worker /app/worker
