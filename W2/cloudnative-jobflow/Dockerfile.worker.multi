@@ -2,12 +2,16 @@
 
 FROM golang:1.22 AS build
 WORKDIR /src
-COPY . .
+
+COPY go.mod go.sum ./
 ENV GOPROXY=https://proxy.golang.org,direct
 RUN go mod download
+
+COPY . .
+
 ARG TARGETOS TARGETARCH
 RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH:-amd64} CGO_ENABLED=0 \
-    go build -o /out/worker ./worker
+    go build -o /out/worker ./W2/cloudnative-jobflow/worker
 
 FROM gcr.io/distroless/static:nonroot
 WORKDIR /app
