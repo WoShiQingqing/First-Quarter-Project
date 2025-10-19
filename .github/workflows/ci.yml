@@ -96,7 +96,7 @@ jobs:
           file: ./W2/cloudnative-jobflow/Dockerfile.worker.multi
           push: true
           platforms: linux/amd64,linux/arm64
-            tags: |
+          tags: |
               ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:latest
               ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ env.SHA_SHORT }}
               ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ github.ref_name }}
