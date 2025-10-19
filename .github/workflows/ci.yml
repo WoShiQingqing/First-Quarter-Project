@@ -48,7 +48,7 @@ jobs:
 
   # ② 只有 push 事件才发布镜像
   build_and_push:
-    if: github.event_name == 'push'
+    if: github.ref_type == 'branch' || github.ref_type == 'tag'
     needs: lint_test
     runs-on: ubuntu-latest
 
@@ -76,15 +76,15 @@ jobs:
       - name: Build & Push API (multi-arch)
         uses: docker/build-push-action@v6
         with:
-          context: ./W2/cloudnative-jobflow
+          context: .
           file: ./W2/cloudnative-jobflow/Dockerfile.api.slim
           push: true
-          # 关键：使用矩阵平台
           platforms: linux/amd64,linux/arm64
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:latest
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ env.SHA_SHORT }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ github.ref_name }}
+
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false   # 先关掉溯源，减少体积；需要再开
@@ -92,14 +92,15 @@ jobs:
       - name: Build & Push Worker (multi-arch)
         uses: docker/build-push-action@v6
         with:
-          context: ./W2/cloudnative-jobflow
+          context: .
           file: ./W2/cloudnative-jobflow/Dockerfile.worker.multi
           push: true
           platforms: linux/amd64,linux/arm64
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ env.SHA_SHORT }}
-            ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-api:${{ github.ref_name }}
+            tags: |
+              ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:latest
+              ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ env.SHA_SHORT }}
+              ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-worker:${{ github.ref_name }}
+
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
